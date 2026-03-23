@@ -5,8 +5,10 @@
 #include "vm.h"
 
 struct proc pool[NPROC];
+char kstack[NPROC][PAGE_SIZE];
 __attribute__((aligned(16))) char kstack[NPROC][PAGE_SIZE];
 __attribute__((aligned(4096))) char trapframe[NPROC][TRAP_PAGE_SIZE];
+TaskInfo task_info_pool[NPROC];
 
 extern char boot_stack_top[];
 struct proc *current_proc;
@@ -33,6 +35,8 @@ void proc_init(void)
 		/*
 		* LAB1: you may need to initialize your new fields of proc here
 		*/
+		p->ti = &task_info_pool[p - pool];
+		p->ti->status = UnInit;
 	}
 	idle.kstack = (uint64)boot_stack_top;
 	idle.pid = 0;
@@ -86,6 +90,8 @@ void scheduler(void)
 				/*
 				* LAB1: you may need to init proc start time here
 				*/
+				p->ti->status = Running;
+
 				p->state = RUNNING;
 				current_proc = p;
 				swtch(&idle.context, &p->context);
