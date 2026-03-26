@@ -6,8 +6,11 @@
 #include "queue.h"
 
 struct proc pool[NPROC];
+char kstack[NPROC][PAGE_SIZE];
 __attribute__((aligned(16))) char kstack[NPROC][PAGE_SIZE];
 __attribute__((aligned(4096))) char trapframe[NPROC][TRAP_PAGE_SIZE];
+TaskInfo task_info_pool[NPROC];
+
 
 extern char boot_stack_top[];
 struct proc *current_proc;
@@ -32,6 +35,10 @@ void proc_init()
 		p->state = UNUSED;
 		p->kstack = (uint64)kstack[p - pool];
 		p->trapframe = (struct trapframe *)trapframe[p - pool];
+
+		p->ti = &task_info_pool[p - pool];
+        p->ti->status = UnInit;
+
 	}
 	idle.kstack = (uint64)boot_stack_top;
 	idle.pid = IDLE_PID;
