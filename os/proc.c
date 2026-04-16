@@ -96,6 +96,10 @@ found:
 	memset((void *)p->trapframe, 0, TRAP_PAGE_SIZE);
 	p->context.ra = (uint64)usertrapret;
 	p->context.sp = p->kstack + KSTACK_SIZE;
+
+	p->priority = DEFAULT_PRIORITY;
+	p->stride = 0;
+	p->pass = BIG_STRIDE / p->priority;
 	return p;
 }
 
@@ -104,31 +108,35 @@ found:
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+
 void scheduler()
 {
 	struct proc *p;
 	for (;;) {
-		/*int has_proc = 0;
+		struct proc *best = 0;
 		for (p = pool; p < &pool[NPROC]; p++) {
-			if (p->state == RUNNABLE) {
-				has_proc = 1;
-				tracef("swtich to proc %d", p - pool);
-				p->state = RUNNING;
-				current_proc = p;
-				swtch(&idle.context, &p->context);
+			if (p->state != RUNNABLE) {
+				continue;
+			}
+			if (best == 0 || p->stride < best->stride)
+			{
+				best = p;
 			}
 		}
-		if(has_proc == 0) {
-			panic("all app are over!\n");
-		}*/
-		p = fetch_task();
-		if (p == NULL) {
+		if(best == 0) {
 			panic("all app are over!\n");
 		}
-		tracef("swtich to proc %d", p - pool);
+		p = best;
+		
+		p->stride += p->pass;
+
+		tracef("swtch to proc %d (pid=%d, stride=%d, pass=%d, priority=%d)", 
+               p - pool, p->pid, p->stride, p->pass, p->priority);
+		
 		p->state = RUNNING;
 		current_proc = p;
 		swtch(&idle.context, &p->context);
+		current_proc = NULL;
 	}
 }
 
@@ -150,9 +158,12 @@ void sched()
 // Give up the CPU for one scheduling round.
 void yield()
 {
-	current_proc->state = RUNNABLE;
-	add_task(current_proc);
-	sched();
+	struct proc *p = curr_proc();
+	if (p && p->state == RUNNING)
+	{
+		p->state = RUNNABLE;
+		sched();
+	}
 }
 
 // Free a process's page table, and free the
@@ -191,7 +202,7 @@ int fork()
 	np->trapframe->a0 = 0;
 	np->parent = p;
 	np->state = RUNNABLE;
-	add_task(np);
+	//add_task(np);
 	return np->pid;
 }
 
@@ -204,7 +215,14 @@ int exec(char *name)
 	uvmunmap(p->pagetable, 0, p->max_page, 1);
 	p->max_page = 0;
 	loader(id, p);
-	return 0;
+
+	p->priority = DEFAULT_PRIORITY;
+	p->stride = 0;
+	p->pass = BIG_STRIDE / DEFAULT_PRIORITY;
+
+	usertrapret();
+	__builtin_unreachable();
+
 }
 
 int wait(int pid, int *code)
@@ -233,7 +251,7 @@ int wait(int pid, int *code)
 			return -1;
 		}
 		p->state = RUNNABLE;
-		add_task(p);
+		//add_task(p);
 		sched();
 	}
 }

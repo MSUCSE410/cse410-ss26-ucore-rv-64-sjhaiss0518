@@ -5,6 +5,8 @@
 #include "syscall_ids.h"
 #include "timer.h"
 #include "trap.h"
+#include "proc.h"
+
 
 uint64 sys_write(int fd, uint64 va, uint len)
 {
@@ -207,13 +209,51 @@ uint64 sys_wait(int pid, uint64 va)
 
 uint64 sys_spawn(uint64 va)
 {
-	// TODO: your job is to complete the sys call
-	return -1;
+	struct proc *p = curr_proc();
+	char filename[200];
+
+	if (copyinstr(p->pagetable, filename, va, sizeof(filename)) <= 0) {
+		return -1;
+	}
+
+	int id = get_id_by_name(filename);
+	if (id < 0)
+	{
+		return -1;
+	}
+
+	struct proc *np = allocproc();
+	if (np == NULL)
+	{
+		return -1;
+	}
+
+	np->parent = curr_proc();
+
+	np->trapframe->epc = BASE_ADDRESS;
+    np->trapframe->sp = np->ustack + USTACK_SIZE;
+
+	if (loader(id, np) < 0) {
+        np->state = UNUSED;
+        return -1;
+    }
+    
+    np->state = RUNNABLE;
+    
+    return np->pid;
 }
 
-uint64 sys_set_priority(long long prio){
-    // TODO: your job is to complete the sys call
-    return -1;
+uint64 sys_set_priority(long long prio) {
+    struct proc *p = curr_proc();
+
+    if (prio < 2) {
+        return -1;
+    }
+
+    p->priority = prio;
+    p->pass = BIG_STRIDE / prio;
+
+    return prio;
 }
 
 
@@ -277,6 +317,9 @@ void syscall()
 		break;
 	case SYS_spawn:
 		ret = sys_spawn(args[0]);
+		break;
+	case SYS_setpriority:
+		ret = sys_set_priority(args[0]);
 		break;
 	default:
 		ret = -1;

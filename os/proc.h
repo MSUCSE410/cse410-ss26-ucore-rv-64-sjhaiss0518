@@ -7,6 +7,11 @@
 
 #define NPROC (512)
 #define FD_BUFFER_SIZE (16)
+#define MAX_SYSCALL_NUM (500)
+
+#define DEFAULT_PRIORITY 16
+#define BIG_STRIDE 65536
+
 
 struct file;
 
@@ -61,6 +66,10 @@ struct proc {
 	struct file *files[FD_BUFFER_SIZE];
 
 	TaskInfo *ti;
+
+	int priority;
+	int stride;
+	int pass;
 };
 
 int cpuid();
